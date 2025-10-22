@@ -1,53 +1,32 @@
-# modules/calc.py
-def stima_residui(coltura, resa_t_ha):
-    """
-    Calcola i residui lasciati in campo basandosi sull'harvest index
-    (percentuale raccolta / totale biomassa).
-    Ritorna residui t/ha.
-    """
-    # harvest index medi per coltura
+def get_harvest_index(coltura):
     hi = {
-        "Mais da granella": 0.55,
-        "Mais trinciato": 0.50,
-        "Frumento": 0.60,
-        "Sorgo da granella": 0.55,
-        "Sorgo trinciato": 0.50,
-        "Erba medica": 0.40,
-        "Loietto": 0.45,
-        "Soia": 0.55,
-        "Nessuna": 1.0
+        "Grano tenero": 0.45,
+        "Grano duro": 0.45,
+        "Mais da granella": 0.50,
+        "Mais trinciato": 0.35,
+        "Sorgo da granella": 0.48,
+        "Sorgo trinciato": 0.35,
+        "Orzo": 0.45,
+        "Avena": 0.40,
+        "Erba medica": 0.30,
+        "Loietto": 0.30,
+        "Fieno misto": 0.30,
+        "Nessuna": 0
     }
-    indice = hi.get(coltura, 0.55)
-    residui = resa_t_ha * (1 - indice) / indice if indice != 0 else 0
-    return residui
+    return hi.get(coltura, 0.4)
 
+def calcola_stoccaggio_terreno(terreno, anno):
+    superficie = terreno["superficie"]
+    annata = terreno["annate"].get(str(anno), {})
+    totale_c = 0
 
-def stima_carbonio(residui_t_ha):
-    """
-    Converte i residui in carbonio stoccato (t C/ha) e poi in CO2 equivalente.
-    Frazione di carbonio stimata = 0.45, moltiplicatore CO2/C = 3.67
-    """
-    C = residui_t_ha * 0.45
-    CO2eq = C * 3.67
-    return CO2eq
+    for i in [1, 2]:
+        coltura = annata.get(f"coltura_{i}", "Nessuna")
+        resa = annata.get(f"resa_{i}", 0)
+        if coltura != "Nessuna" and resa > 0:
+            HI = get_harvest_index(coltura)
+            residui = resa * ((1 - HI) / HI)
+            c_stoccato = residui * superficie * 0.45 * 3.67  # C→CO2
+            totale_c += c_stoccato
 
-
-def calcola_stoccaggio_terreno(dati_terreno, anno):
-    """
-    Calcola lo stoccaggio totale di CO2 per un terreno in un anno.
-    Somma le due colture se presenti.
-    """
-    annate = dati_terreno.get("annate", {})
-    annata = annate.get(str(anno), {})
-    superficie = dati_terreno.get("superficie", 0)
-    totale_CO2 = 0.0
-
-    for coltura in ["coltura1", "coltura2"]:
-        dati_coltura = annata.get(coltura, {})
-        nome = dati_coltura.get("nome", "Nessuna")
-        resa = dati_coltura.get("resa", 0)
-        residui = stima_residui(nome, resa)
-        co2 = stima_carbonio(residui) * superficie
-        totale_CO2 += co2
-
-    return totale_CO2
+    return totale_c
