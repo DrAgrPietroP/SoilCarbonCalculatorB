@@ -34,5 +34,4 @@ anno = ui.seleziona_anno()
 # ============================================================
 # INSERIMENTO COLTURE
 # ============================================================
-st.subheader(f"🌾 Dati colturali per {terreno_seleziona_
-
+st.subheader(f"🌾 Dati colturali per
