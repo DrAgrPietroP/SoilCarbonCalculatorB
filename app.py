@@ -6,7 +6,7 @@ import pandas as pd
 # CONFIGURAZIONE BASE
 # ============================================================
 st.set_page_config(
-    page_title="Soil Carbon Calculator",
+    page_title="Soil Carbon Calculator B",
     page_icon="🌱",
     layout="centered"
 )
