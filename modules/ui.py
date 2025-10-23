@@ -25,4 +25,3 @@ def form_coltura(num, dati_annata):
     # Salva in session_state
     dati_annata[f"coltura_{num}"] = coltura
     dati_annata[f"resa_{num}"] = resa
-
