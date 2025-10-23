@@ -187,7 +187,7 @@ if terreno_selezionato:
         "Sorgo da granella", "Sorgo trinciato",
         "Orzo", "Avena", "Triticale", "Segale",
         "Soia", "Erba medica", "Loietto", "Erbaio misto",
-        "Clover", "Vetch", "Rye", "Mustard"
+        "Trifoglio", "Veccia", "Rafano", "Senape"
     ]
 
     pratiche = {
