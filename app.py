@@ -216,7 +216,7 @@ if terreno_selezionato:
 # ============================================================
 # SEZIONE 9: ADMIN (solo per te)
 # ============================================================
-ADMIN_PASSWORD = "admin123"  # cambiala con password sicura
+ADMIN_PASSWORD = "Pi3tr0"  # cambiala con password sicura
 
 st.sidebar.subheader("🔧 Admin")
 admin_pass = st.sidebar.text_input("Password admin", type="password")
