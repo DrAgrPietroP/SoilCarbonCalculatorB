@@ -26,7 +26,6 @@ def salva_dati(dati):
 # SEZIONE 1: LOGIN / REGISTRAZIONE
 # ============================================================
 st.sidebar.header("🔒 Accesso utente")
-
 dati_utenti = carica_dati()
 
 email = st.sidebar.text_input("Email")
@@ -181,4 +180,36 @@ if terreno_selezionato:
 
         # Salva dati persistenti
         salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
+
+    # ============================================================
+    # SEZIONE 8: ESPORTAZIONE CSV
+    # ============================================================
+    if st.session_state["terreni"]:
+        export_rows = []
+        for nome, dati in st.session_state["terreni"].items():
+            for a, annata in dati["annate"].items():
+                row = {
+                    "Terreno": nome,
+                    "Anno": a,
+                    "Superficie (ha)": dati["superficie"]
+                }
+                for i in [1,2]:
+                    row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
+                    row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
+                    if annata.get(f"resa_{i}",0) > 0:
+                        row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
+                    else:
+                        row[f"CO₂ {i} (t)"] = 0
+                row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
+                export_rows.append(row)
+
+        if export_rows:
+            df_export = pd.DataFrame(export_rows)
+            csv = df_export.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="📥 Esporta dati terreni in CSV",
+                data=csv,
+                file_name=f"{utente}_terreni.csv",
+                mime="text/csv"
+            )
 
