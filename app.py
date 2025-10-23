@@ -111,36 +111,19 @@ if is_admin:
                         coltura = annata.get(f"coltura_{i}", "")
                         resa = annata.get(f"resa_{i}", 0)
                         if coltura != "Nessuna" and coltura != "":
-                            co2 = resa*dati["superficie"]*0.45*3.67
+                            moltiplicatore = annata.get("pratica", 1)
+                            co2 = resa*dati["superficie"]*0.45*3.67*moltiplicatore
                             st.write(f"    - Coltura {i}: {coltura}, Resa: {resa} t/ha, CO₂ stimata: {co2:.2f} t")
+                    # Cover crop
+                    cover = annata.get("cover_crop", "")
+                    if cover != "":
+                        biomassa = annata.get("biomassa_cover",0)
+                        moltiplicatore = annata.get("pratica",1)
+                        co2_cover = biomassa*dati["superficie"]*0.45*3.67*moltiplicatore
+                        st.write(f"    - Cover crop: {cover}, Biomassa: {biomassa} t/ha, CO₂ stimata: {co2_cover:.2f} t")
         else:
             st.write("  Nessun terreno registrato")
         st.markdown("---")
-    
-    # Export CSV globale
-    export_rows = []
-    for email_user, info in dati_utenti.items():
-        for nome, dati in info.get("terreni", {}).items():
-            for anno, annata in dati.get("annate", {}).items():
-                row = {"Email": email_user, "Terreno": nome, "Anno": anno, "Superficie (ha)": dati["superficie"]}
-                for i in [1,2]:
-                    row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
-                    row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
-                    if annata.get(f"resa_{i}",0) > 0:
-                        row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
-                    else:
-                        row[f"CO₂ {i} (t)"] = 0
-                row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
-                export_rows.append(row)
-    if export_rows:
-        df_export = pd.DataFrame(export_rows)
-        csv = df_export.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Esporta tutti i dati utenti in CSV",
-            data=csv,
-            file_name="tutti_utenti_terreni.csv",
-            mime="text/csv"
-        )
     st.stop()
 
 # ============================================================
@@ -180,7 +163,7 @@ with col2:
             st.rerun()
 
 # ============================================================
-# DATI COLTURALI E CALCOLO CO₂
+# DATI COLTURALI, COVER CROPS, PRATICHE, CALCOLO CO₂
 # ============================================================
 if terreno_selezionato:
     terreno_dati = st.session_state["terreni"][terreno_selezionato]
@@ -203,9 +186,18 @@ if terreno_selezionato:
         "Frumento tenero", "Frumento duro", "Frumento trinciato",
         "Sorgo da granella", "Sorgo trinciato",
         "Orzo", "Avena", "Triticale", "Segale",
-        "Soia", "Erba medica", "Loietto", "Erbaio misto"
+        "Soia", "Erba medica", "Loietto", "Erbaio misto",
+        "Clover", "Vetch", "Rye", "Mustard"
     ]
 
+    pratiche = {
+        "Lavorazione convenzionale": 1.0,
+        "Lavorazione conservativa": 1.1,
+        "Concimazione organica": 1.05,
+        "Lavorazione minima": 1.08
+    }
+
+    # Colture principali
     for i in [1,2]:
         st.markdown(f"**Coltura {i}**")
         coltura = st.selectbox(f"Coltura {i}", colture_possibili, key=f"coltura_{i}_{terreno_selezionato}_{anno}")
@@ -213,16 +205,33 @@ if terreno_selezionato:
         terreno_dati["annate"][anno][f"coltura_{i}"] = coltura
         terreno_dati["annate"][anno][f"resa_{i}"] = resa
 
+    # Cover crop
+    st.markdown("**Cover crop (facoltativa)**")
+    cover = st.selectbox("Cover crop", colture_possibili, key=f"cover_{terreno_selezionato}_{anno}")
+    biomassa_cover = st.number_input("Biomassa cover (t/ha)", min_value=0.0, step=0.1, key=f"biomassa_{terreno_selezionato}_{anno}")
+    terreno_dati["annate"][anno]["cover_crop"] = cover
+    terreno_dati["annate"][anno]["biomassa_cover"] = biomassa_cover
+
+    # Pratica agronomica
+    st.markdown("**Pratica agronomica**")
+    pratica_scelta = st.selectbox("Pratica", list(pratiche.keys()), key=f"pratica_{terreno_selezionato}_{anno}")
+    terreno_dati["annate"][anno]["pratica"] = pratiche[pratica_scelta]
+
     st.markdown("---")
     if st.button("🔍 Calcola stoccaggio di CO₂"):
         superficie = terreno_dati["superficie"]
         dati_annata = terreno_dati["annate"][anno]
+        moltiplicatore = dati_annata.get("pratica", 1)
         totale_co2 = 0
+
         for i in [1,2]:
             resa = dati_annata.get(f"resa_{i}",0)
-            if resa>0:
-                totale_co2 += resa*superficie*0.45*3.67
-        st.success(f"✅ CO₂ stimata: **{totale_co2:.2f} t**")
+            if resa>0 and dati_annata.get(f"coltura_{i}", "Nessuna") != "Nessuna":
+                totale_co2 += resa*superficie*0.45*3.67*moltiplicatore
 
-        # Salva dati
+        if dati_annata.get("cover_crop", "") != "Nessuna" and dati_annata.get("cover_crop", "") != "":
+            totale_co2 += dati_annata.get("biomassa_cover",0)*superficie*0.45*3.67*moltiplicatore
+
+        st.success(f"✅ CO₂ stimata: **{totale_co2:.2f} t**")
         salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
+
