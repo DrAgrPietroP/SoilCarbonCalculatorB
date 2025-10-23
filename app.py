@@ -23,6 +23,12 @@ def salva_dati(dati):
         json.dump(dati, f, indent=2)
 
 # ============================================================
+# CONFIGURAZIONE ADMIN
+# ============================================================
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "admin123"  # Cambia con password sicura
+
+# ============================================================
 # SEZIONE 1: LOGIN / REGISTRAZIONE
 # ============================================================
 st.sidebar.header("🔒 Accesso utente")
@@ -35,7 +41,16 @@ pulsante = st.sidebar.button("Conferma")
 
 if "utente_corrente" not in st.session_state:
     st.session_state["utente_corrente"] = None
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
 
+# Logout
+if st.sidebar.button("🔓 Logout"):
+    st.session_state["utente_corrente"] = None
+    st.session_state["is_admin"] = False
+    st.experimental_rerun()
+
+# Login / Registrazione
 if pulsante:
     if azione == "Registrati":
         if email in dati_utenti:
@@ -47,8 +62,13 @@ if pulsante:
             salva_dati(dati_utenti)
             st.sidebar.success("✅ Registrazione completata. Ora fai login.")
     else:  # Login
-        if email in dati_utenti and dati_utenti[email]["password"] == password:
+        if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
             st.session_state["utente_corrente"] = email
+            st.session_state["is_admin"] = True
+            st.sidebar.success(f"✅ Login Admin effettuato")
+        elif email in dati_utenti and dati_utenti[email]["password"] == password:
+            st.session_state["utente_corrente"] = email
+            st.session_state["is_admin"] = False
             st.sidebar.success(f"✅ Login effettuato: {email}")
         else:
             st.sidebar.error("❌ Email o password errati")
@@ -57,21 +77,71 @@ if st.session_state["utente_corrente"] is None:
     st.stop()
 
 utente = st.session_state["utente_corrente"]
+is_admin = st.session_state["is_admin"]
 
 # ============================================================
 # SEZIONE 2: CARICAMENTO DATI UTENTE
 # ============================================================
-if utente not in dati_utenti:
-    dati_utenti[utente] = {"password": password, "terreni": {}}
-
-if "terreni" not in st.session_state:
-    st.session_state["terreni"] = dati_utenti[utente]["terreni"]
+if not is_admin:
+    if utente not in dati_utenti:
+        dati_utenti[utente] = {"password": password, "terreni": {}}
+    if "terreni" not in st.session_state:
+        st.session_state["terreni"] = dati_utenti[utente]["terreni"]
 
 # ============================================================
 # SEZIONE 3: HEADER
 # ============================================================
 st.title("🌱 Soil Carbon Calculator B")
-st.caption(f"Utente: {utente} – Stima dello stoccaggio annuo di carbonio nel suolo")
+st.caption(f"Utente: {utente}")
+
+# ============================================================
+# SEZIONE ADMIN
+# ============================================================
+if is_admin:
+    st.subheader("🛠️ Pannello Admin")
+    for email_user, info in dati_utenti.items():
+        st.markdown(f"**📧 Email:** {email_user}")
+        terreni = info.get("terreni", {})
+        if terreni:
+            for nome, dati in terreni.items():
+                st.write(f"- Terreno: {nome}, Superficie: {dati['superficie']} ha")
+                for anno, annata in dati.get("annate", {}).items():
+                    st.write(f"  - Anno: {anno}")
+                    for i in [1,2]:
+                        coltura = annata.get(f"coltura_{i}", "")
+                        resa = annata.get(f"resa_{i}", 0)
+                        if coltura != "Nessuna" and coltura != "":
+                            co2 = resa*dati["superficie"]*0.45*3.67
+                            st.write(f"    - Coltura {i}: {coltura}, Resa: {resa} t/ha, CO₂ stimata: {co2:.2f} t")
+        else:
+            st.write("  Nessun terreno registrato")
+        st.markdown("---")
+    
+    # Export CSV globale
+    export_rows = []
+    for email_user, info in dati_utenti.items():
+        for nome, dati in info.get("terreni", {}).items():
+            for anno, annata in dati.get("annate", {}).items():
+                row = {"Email": email_user, "Terreno": nome, "Anno": anno, "Superficie (ha)": dati["superficie"]}
+                for i in [1,2]:
+                    row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
+                    row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
+                    if annata.get(f"resa_{i}",0) > 0:
+                        row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
+                    else:
+                        row[f"CO₂ {i} (t)"] = 0
+                row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
+                export_rows.append(row)
+    if export_rows:
+        df_export = pd.DataFrame(export_rows)
+        csv = df_export.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Esporta tutti i dati utenti in CSV",
+            data=csv,
+            file_name="tutti_utenti_terreni.csv",
+            mime="text/csv"
+        )
+    st.stop()
 
 # ============================================================
 # SEZIONE 4: SCELTA ANNO
@@ -109,6 +179,9 @@ with col2:
             salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
             st.rerun()
 
+# ============================================================
+# SEZIONE 6: DATI COLTURALI, CALCOLO CO₂ E CSV
+# ============================================================
 if terreno_selezionato:
     terreno_dati = st.session_state["terreni"][terreno_selezionato]
 
@@ -118,11 +191,7 @@ if terreno_selezionato:
         salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
         st.rerun()
 
-    # ============================================================
-    # SEZIONE 6: DATI COLTURALI
-    # ============================================================
     st.subheader(f"🌾 Dati colturali per {terreno_selezionato} ({anno})")
-
     if "annate" not in terreno_dati:
         terreno_dati["annate"] = {}
     if anno not in terreno_dati["annate"]:
@@ -144,25 +213,18 @@ if terreno_selezionato:
         terreno_dati["annate"][anno][f"coltura_{i}"] = coltura
         terreno_dati["annate"][anno][f"resa_{i}"] = resa
 
-    # ============================================================
-    # SEZIONE 7: CALCOLO CO2
-    # ============================================================
     st.markdown("---")
     if st.button("🔍 Calcola stoccaggio di CO₂"):
         superficie = terreno_dati["superficie"]
         dati_annata = terreno_dati["annate"][anno]
-
         totale_co2 = 0
         for i in [1,2]:
             resa = dati_annata.get(f"resa_{i}",0)
             if resa>0:
                 totale_co2 += resa*superficie*0.45*3.67
-
         st.success(f"✅ Calcolo completato! CO₂ stimata: **{totale_co2:.2f} t**")
 
-        # ============================================================
-        # RIEPILOGO GENERALE
-        # ============================================================
+        # Riepilogo generale
         righe=[]
         for nome, dati in st.session_state["terreni"].items():
             for a, annata in dati["annate"].items():
@@ -178,92 +240,30 @@ if terreno_selezionato:
             totale=df["CO₂ stimata(t)"].sum()
             st.markdown(f"**Totale complessivo:** 🌍 {totale:.2f} t CO₂")
 
-        # Salva dati persistenti
+        # Salva dati
         salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
 
-    # ============================================================
-    # SEZIONE 8: ESPORTAZIONE CSV UTENTE
-    # ============================================================
-    if st.session_state["terreni"]:
-        export_rows = []
-        for nome, dati in st.session_state["terreni"].items():
-            for a, annata in dati["annate"].items():
-                row = {
-                    "Terreno": nome,
-                    "Anno": a,
-                    "Superficie (ha)": dati["superficie"]
-                }
-                for i in [1,2]:
-                    row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
-                    row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
-                    if annata.get(f"resa_{i}",0) > 0:
-                        row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
-                    else:
-                        row[f"CO₂ {i} (t)"] = 0
-                row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
-                export_rows.append(row)
-
-        if export_rows:
-            df_export = pd.DataFrame(export_rows)
-            csv = df_export.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="📥 Esporta dati terreni in CSV",
-                data=csv,
-                file_name=f"{utente}_terreni.csv",
-                mime="text/csv"
-            )
-
-# ============================================================
-# SEZIONE 9: ADMIN (solo per te)
-# ============================================================
-ADMIN_PASSWORD = "Pi3tr0"  # cambiala con password sicura
-
-st.sidebar.subheader("🔧 Admin")
-admin_pass = st.sidebar.text_input("Password admin", type="password")
-if admin_pass == ADMIN_PASSWORD:
-    st.subheader("🛠️ Sezione Admin: Utenti registrati")
-    dati_utenti = carica_dati()
-    for email, info in dati_utenti.items():
-        st.markdown(f"**📧 Email:** {email}")
-        terreni = info.get("terreni", {})
-        if terreni:
-            for nome, dati in terreni.items():
-                st.write(f"- Terreno: {nome}, Superficie: {dati['superficie']} ha")
-                for anno, annata in dati.get("annate", {}).items():
-                    st.write(f"  - Anno: {anno}")
-                    for i in [1,2]:
-                        coltura = annata.get(f"coltura_{i}", "")
-                        resa = annata.get(f"resa_{i}", 0)
-                        if coltura != "Nessuna" and coltura != "":
-                            co2 = resa*dati["superficie"]*0.45*3.67
-                            st.write(f"    - Coltura {i}: {coltura}, Resa: {resa} t/ha, CO₂ stimata: {co2:.2f} t")
-        else:
-            st.write("  Nessun terreno registrato")
-        st.markdown("---")
-
-    # Pulsante per esportare tutti i dati in CSV
+    # Export CSV utente
     export_rows = []
-    for email, info in dati_utenti.items():
-        for nome, dati in info.get("terreni", {}).items():
-            for anno, annata in dati.get("annate", {}).items():
-                row = {"Email": email, "Terreno": nome, "Anno": anno, "Superficie (ha)": dati["superficie"]}
-                for i in [1,2]:
-                    row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
-                    row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
-                    if annata.get(f"resa_{i}",0) > 0:
-                        row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
-                    else:
-                        row[f"CO₂ {i} (t)"] = 0
-                row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
-                export_rows.append(row)
+    for nome, dati in st.session_state["terreni"].items():
+        for a, annata in dati.get("annate", {}).items():
+            row = {"Terreno": nome, "Anno": a, "Superficie (ha)": dati["superficie"]}
+            for i in [1,2]:
+                row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
+                row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
+                if annata.get(f"resa_{i}",0) > 0:
+                    row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
+                else:
+                    row[f"CO₂ {i} (t)"] = 0
+            row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
+            export_rows.append(row)
     if export_rows:
         df_export = pd.DataFrame(export_rows)
         csv = df_export.to_csv(index=False).encode("utf-8")
         st.download_button(
-            label="📥 Esporta tutti i dati utenti in CSV",
+            label="📥 Esporta dati terreni in CSV",
             data=csv,
-            file_name="tutti_utenti_terreni.csv",
+            file_name=f"{utente}_terreni.csv",
             mime="text/csv"
         )
-else:
-    st.sidebar.info("🔒 Inserisci password admin per visualizzare gli utenti")
+
