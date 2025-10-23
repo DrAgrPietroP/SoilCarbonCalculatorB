@@ -25,8 +25,8 @@ def salva_dati(dati):
 # ============================================================
 # CONFIGURAZIONE ADMIN
 # ============================================================
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "admin123"  # Cambia con password sicura
+ADMIN_EMAIL = "ADMIN"
+ADMIN_PASSWORD = "Pi3tr0"  # Password admin
 
 # ============================================================
 # SEZIONE 1: LOGIN / REGISTRAZIONE
@@ -53,7 +53,7 @@ if st.sidebar.button("🔓 Logout"):
 # Login / Registrazione
 if pulsante:
     if azione == "Registrati":
-        if email in dati_utenti:
+        if email in dati_utenti or email == ADMIN_EMAIL:
             st.sidebar.error("❌ Email già registrata")
         elif email.strip() == "" or password.strip() == "":
             st.sidebar.warning("⚠️ Inserisci email e password valide")
@@ -203,67 +203,5 @@ if terreno_selezionato:
         "Frumento tenero", "Frumento duro", "Frumento trinciato",
         "Sorgo da granella", "Sorgo trinciato",
         "Orzo", "Avena", "Triticale", "Segale",
-        "Soia", "Erba medica", "Loietto", "Erbaio misto"
-    ]
-
-    for i in [1,2]:
-        st.markdown(f"**Coltura {i}**")
-        coltura = st.selectbox(f"Coltura {i}", colture_possibili, key=f"coltura_{i}_{terreno_selezionato}_{anno}")
-        resa = st.number_input(f"Resa (t/ha) coltura {i}", min_value=0.0, step=0.1, key=f"resa_{i}_{terreno_selezionato}_{anno}")
-        terreno_dati["annate"][anno][f"coltura_{i}"] = coltura
-        terreno_dati["annate"][anno][f"resa_{i}"] = resa
-
-    st.markdown("---")
-    if st.button("🔍 Calcola stoccaggio di CO₂"):
-        superficie = terreno_dati["superficie"]
-        dati_annata = terreno_dati["annate"][anno]
-        totale_co2 = 0
-        for i in [1,2]:
-            resa = dati_annata.get(f"resa_{i}",0)
-            if resa>0:
-                totale_co2 += resa*superficie*0.45*3.67
-        st.success(f"✅ Calcolo completato! CO₂ stimata: **{totale_co2:.2f} t**")
-
-        # Riepilogo generale
-        righe=[]
-        for nome, dati in st.session_state["terreni"].items():
-            for a, annata in dati["annate"].items():
-                co2 = 0
-                for i in [1,2]:
-                    resa = annata.get(f"resa_{i}",0)
-                    co2 += resa*dati["superficie"]*0.45*3.67
-                righe.append({"Terreno":nome, "Anno":a,"Superficie(ha)":dati["superficie"],"CO₂ stimata(t)":co2})
-
-        if righe:
-            df=pd.DataFrame(righe)
-            st.dataframe(df,use_container_width=True)
-            totale=df["CO₂ stimata(t)"].sum()
-            st.markdown(f"**Totale complessivo:** 🌍 {totale:.2f} t CO₂")
-
-        # Salva dati
-        salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
-
-    # Export CSV utente
-    export_rows = []
-    for nome, dati in st.session_state["terreni"].items():
-        for a, annata in dati.get("annate", {}).items():
-            row = {"Terreno": nome, "Anno": a, "Superficie (ha)": dati["superficie"]}
-            for i in [1,2]:
-                row[f"Coltura {i}"] = annata.get(f"coltura_{i}", "")
-                row[f"Resa {i} (t/ha)"] = annata.get(f"resa_{i}", 0)
-                if annata.get(f"resa_{i}",0) > 0:
-                    row[f"CO₂ {i} (t)"] = annata.get(f"resa_{i}",0)*dati["superficie"]*0.45*3.67
-                else:
-                    row[f"CO₂ {i} (t)"] = 0
-            row["CO₂ totale (t)"] = row["CO₂ 1 (t)"] + row["CO₂ 2 (t)"]
-            export_rows.append(row)
-    if export_rows:
-        df_export = pd.DataFrame(export_rows)
-        csv = df_export.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Esporta dati terreni in CSV",
-            data=csv,
-            file_name=f"{utente}_terreni.csv",
-            mime="text/csv"
-        )
+        "Soia", "Erba medica",
 
