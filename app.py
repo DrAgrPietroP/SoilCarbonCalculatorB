@@ -114,13 +114,11 @@ if is_admin:
                             moltiplicatore = annata.get("pratica", 1)
                             co2 = resa*dati["superficie"]*0.45*3.67*moltiplicatore
                             st.write(f"    - Coltura {i}: {coltura}, Resa: {resa} t/ha, CO₂ stimata: {co2:.2f} t")
-                    # Cover crop
                     cover = annata.get("cover_crop", "")
-                    if cover != "":
+                    if cover != "" and cover != "Nessuna":
                         biomassa = annata.get("biomassa_cover",0)
-                        moltiplicatore = annata.get("pratica",1)
                         co2_cover = biomassa*dati["superficie"]*0.45*3.67*moltiplicatore
-                        st.write(f"    - Cover crop: {cover}, Biomassa: {biomassa} t/ha, CO₂ stimata: {co2_cover:.2f} t")
+                        st.write(f"    - Cover crop: {cover}, CO₂ stimata: {co2_cover:.2f} t")
         else:
             st.write("  Nessun terreno registrato")
         st.markdown("---")
@@ -163,7 +161,7 @@ with col2:
             st.rerun()
 
 # ============================================================
-# DATI COLTURALI, COVER CROPS, PRATICHE, CALCOLO CO₂
+# DATI COLTURALI, COVER CROPS STANDARD, PRATICHE, CALCOLO CO₂
 # ============================================================
 if terreno_selezionato:
     terreno_dati = st.session_state["terreni"][terreno_selezionato]
@@ -186,9 +184,16 @@ if terreno_selezionato:
         "Frumento tenero", "Frumento duro", "Frumento trinciato",
         "Sorgo da granella", "Sorgo trinciato",
         "Orzo", "Avena", "Triticale", "Segale",
-        "Soia", "Erba medica", "Loietto", "Erbaio misto",
-        "Trifoglio", "Veccia", "Rafano", "Senape"
+        "Soia", "Erba medica", "Loietto", "Erbaio misto"
     ]
+
+    cover_crops_tabella = {
+        "Nessuna": 0,
+        "Trifoglio": 3,
+        "Veccia": 2.5,
+        "Segale": 4,
+        "Senape": 2
+    }
 
     pratiche = {
         "Lavorazione convenzionale": 1.0,
@@ -207,10 +212,9 @@ if terreno_selezionato:
 
     # Cover crop
     st.markdown("**Cover crop (facoltativa)**")
-    cover = st.selectbox("Cover crop", colture_possibili, key=f"cover_{terreno_selezionato}_{anno}")
-    biomassa_cover = st.number_input("Biomassa cover (t/ha)", min_value=0.0, step=0.1, key=f"biomassa_{terreno_selezionato}_{anno}")
+    cover = st.selectbox("Cover crop", list(cover_crops_tabella.keys()), key=f"cover_{terreno_selezionato}_{anno}")
     terreno_dati["annate"][anno]["cover_crop"] = cover
-    terreno_dati["annate"][anno]["biomassa_cover"] = biomassa_cover
+    terreno_dati["annate"][anno]["biomassa_cover"] = cover_crops_tabella[cover]
 
     # Pratica agronomica
     st.markdown("**Pratica agronomica**")
@@ -229,9 +233,10 @@ if terreno_selezionato:
             if resa>0 and dati_annata.get(f"coltura_{i}", "Nessuna") != "Nessuna":
                 totale_co2 += resa*superficie*0.45*3.67*moltiplicatore
 
-        if dati_annata.get("cover_crop", "") != "Nessuna" and dati_annata.get("cover_crop", "") != "":
+        if dati_annata.get("cover_crop", "") != "Nessuna":
             totale_co2 += dati_annata.get("biomassa_cover",0)*superficie*0.45*3.67*moltiplicatore
 
         st.success(f"✅ CO₂ stimata: **{totale_co2:.2f} t**")
         salva_dati({**dati_utenti, utente: {"password": dati_utenti[utente]["password"], "terreni": st.session_state["terreni"]}})
+
 
