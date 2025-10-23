@@ -1,106 +1,137 @@
 import streamlit as st
 import pandas as pd
-from modules import data, ui, calc
 
 # ============================================================
-# CONFIGURAZIONE INIZIALE APP
+# IMPOSTAZIONI INIZIALI
 # ============================================================
 
-st.set_page_config(
-    page_title="Soil Carbon Calculator B",
-    page_icon="🌱",
-    layout="wide"
-)
+st.set_page_config(page_title="Soil Carbon Calculator", layout="wide")
 
-# Inizializza la sessione se non esiste
 if "terreni" not in st.session_state:
     st.session_state["terreni"] = {}
 
-# ============================================================
-# HEADER E TITOLO
-# ============================================================
-
 st.title("🌱 Soil Carbon Calculator B")
-st.caption("Calcola l’accumulo di carbonio nei suoli agricoli in base alle colture e alle rese.")
+st.caption("Stima dello stoccaggio annuo di carbonio nel suolo agricolo.")
 
 
 # ============================================================
-# SELEZIONE ANNO
+# SEZIONE: SCELTA DELL’ANNO
 # ============================================================
 
-st.subheader("📅 Selezione anno")
-anni_possibili = list(range(1950, 2026))
-anno = st.selectbox("Anno di riferimento", anni_possibili, index=len(anni_possibili)-1)
+st.subheader("📅 Seleziona l'anno di riferimento")
+anni = list(range(1950, 2026))
+anno = st.selectbox("Anno", anni, index=len(anni)-1)
 
 
 # ============================================================
-# GESTIONE TERRENI
+# SEZIONE: GESTIONE TERRENI
 # ============================================================
 
-st.subheader("🌾 Gestione terreni")
+st.subheader("🌍 Gestione dei terreni")
 
-terreno_selezionato = ui.seleziona_o_aggiungi_terreno()
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    if st.session_state["terreni"]:
+        terreno_selezionato = st.selectbox(
+            "Seleziona un terreno esistente",
+            list(st.session_state["terreni"].keys())
+        )
+    else:
+        terreno_selezionato = None
+
+with col2:
+    if st.button("➕ Aggiungi nuovo terreno"):
+        with st.form("nuovo_terreno"):
+            st.subheader("🧩 Nuovo terreno")
+            nome = st.text_input("Nome del terreno")
+            superficie = st.number_input("Superficie (ha)", min_value=0.1, step=0.1)
+            salva = st.form_submit_button("Salva terreno")
+            if salva:
+                if nome in st.session_state["terreni"]:
+                    st.warning("⚠️ Esiste già un terreno con questo nome.")
+                else:
+                    st.session_state["terreni"][nome] = {"superficie": superficie, "annate": {}}
+                    st.success(f"✅ Terreno '{nome}' aggiunto.")
+                    st.rerun()
 
 if terreno_selezionato:
     terreno_dati = st.session_state["terreni"][terreno_selezionato]
 
-    st.markdown(f"**Superficie:** {terreno_dati['superficie']} ha")
+    if "annate" not in terreno_dati:
+        terreno_dati["annate"] = {}
 
-    # Sezione per le due colture annuali
-    st.divider()
-    st.subheader(f"🧮 Dati colturali per {terreno_selezionato} - Anno {anno}")
+    if anno not in terreno_dati["annate"]:
+        terreno_dati["annate"][anno] = {}
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Coltura 1**")
-        ui.form_coltura(1, terreno_dati, anno)
-    with col2:
-        st.markdown("**Coltura 2**")
-        ui.form_coltura(2, terreno_dati, anno)
+    st.subheader(f"🌾 Dati colturali per {terreno_selezionato} ({anno})")
 
-    st.divider()
+    colture_possibili = [
+        "Nessuna",
+        "Mais da granella", "Mais trinciato",
+        "Frumento tenero", "Frumento duro", "Frumento trinciato",
+        "Sorgo da granella", "Sorgo trinciato",
+        "Orzo", "Avena", "Triticale", "Segale",
+        "Soia", "Erba medica", "Loietto", "Erbaio misto"
+    ]
+
+    for i in [1, 2]:
+        st.markdown(f"**Coltura {i}**")
+        coltura = st.selectbox(
+            f"Coltura {i}",
+            colture_possibili,
+            key=f"coltura_{i}_{terreno_selezionato}_{anno}"
+        )
+        resa = st.number_input(
+            f"Resa (t/ha) per coltura {i}",
+            min_value=0.0,
+            step=0.1,
+            key=f"resa_{i}_{terreno_selezionato}_{anno}"
+        )
+
+        terreno_dati["annate"][anno][f"coltura_{i}"] = coltura
+        terreno_dati["annate"][anno][f"resa_{i}"] = resa
 
 
     # ============================================================
-    # CALCOLO DELLO STOCCAGGIO
+    # CALCOLO SEMPLICE DELLA CO2 STABILIZZATA
     # ============================================================
+
+    st.markdown("---")
 
     if st.button("🔍 Calcola stoccaggio di CO₂"):
-        totale_CO2 = calc.calcola_stoccaggio_terreno(terreno_dati, anno)
+        superficie = terreno_dati["superficie"]
+        dati_annata = terreno_dati["annate"][anno]
 
-        st.success(f"✅ Calcolo completato con successo! CO₂ stoccata: **{totale_CO2:.2f} tonnellate**")
+        totale_carbonio = 0
+        for i in [1, 2]:
+            resa = dati_annata.get(f"resa_{i}", 0)
+            if resa > 0:
+                # Stima semplificata: 0.45 tC per t di biomassa secca * 3.67 per CO2
+                carbonio = resa * superficie * 0.45 * 3.67
+                totale_carbonio += carbonio
 
-        progress_text = "Elaborazione completata..."
-        st.progress(100, text=progress_text)
+        st.success(f"✅ Calcolo completato! CO₂ stimata: **{totale_carbonio:.2f} tonnellate**")
 
-        # Tabella riepilogativa per tutti i terreni
         st.markdown("### 📊 Riepilogo generale")
 
         righe = []
         for nome, dati in st.session_state["terreni"].items():
-            for a, dati_annata in dati["annate"].items():
-                co2 = calc.calcola_stoccaggio_terreno(dati, a)
+            for a, annata in dati["annate"].items():
+                co2 = 0
+                for i in [1, 2]:
+                    resa = annata.get(f"resa_{i}", 0)
+                    co2 += resa * dati["superficie"] * 0.45 * 3.67
                 righe.append({
                     "Terreno": nome,
                     "Anno": a,
                     "Superficie (ha)": dati["superficie"],
-                    "CO₂ stoccata (t)": co2
+                    "CO₂ stimata (t)": co2
                 })
 
         if righe:
             df = pd.DataFrame(righe)
             st.dataframe(df, use_container_width=True)
-
-            totale_generale = df["CO₂ stoccata (t)"].sum()
-            st.markdown(f"**Totale complessivo:** 🌍 {totale_generale:.2f} tonnellate di CO₂")
-        else:
-            st.info("Nessun dato disponibile per il riepilogo.")
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.markdown("---")
-st.caption("🧠 Progetto di agronomia digitale - MVP SoilCarbonCalculatorB © 2025")
+            totale = df["CO₂ stimata (t)"].sum()
+            st.markdown(f"**Totale complessivo:** 🌍 {totale:.2f} tonnellate di CO₂")
 
